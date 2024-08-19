@@ -1,48 +1,131 @@
 # Copyright (C) 2024 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
+# GitHub Actions 工作流程代码的逐行详细解释
 name: E2E test with manifests
+#name: 这是工作流程的名称。在 GitHub Actions 的用户界面中可以看到这个名称。本工作流程的名称是 “E2E test with manifests”。
 
-on:
-  pull_request:
-    branches: [main]
+on:   # 指定触发工作流程的事件。这里指定了 pull_request 和 workflow_dispatch 事件。
+  pull_request:  # 触发工作流程的具体事件类型。它表示每当有拉取请求（Pull Request）被创建或更新时，工作流程将被触发
+    branches: [main]  #  只在指定分支的拉取请求上触发工作流程。在此例中，只有针对 main 分支的拉取请求才会触发该工作流程。
     types: [opened, reopened, ready_for_review, synchronize] # added `ready_for_review` since draft is skipped
-    paths:
-      - "**/kubernetes/manifests/**"
-      - "**/tests/test_manifest**"
-      - "!**.md"
-      - "!**.txt"
-  workflow_dispatch:
+          # types: 定义触发工作流程的特定事件类型。
+          # opened: 拉取请求被打开时触发。
+          # reopened: 拉取请求被重新打开时触发。
+          # ready_for_review: 拉取请求从草稿状态变为可供审查时触发。
+          # synchronize: 每当拉取请求中的代码发生变更（例如新增提交或合并）时触发。
+    paths: # 只在特定文件或目录下的变更时触发工作流程。
+      - "**/kubernetes/manifests/**"  # 任何在 kubernetes/manifests 目录下的文件或子目录变更时触发
+      - "**/tests/test_manifest**"    # 任何在 tests/test_manifest 路径下的文件变更时触发
+      - "!**.md"  # "!**.md": 忽略对 .md 文件的变更。
+      - "!**.txt" # "!**.txt": 忽略对 .txt 文件的变更。
+  workflow_dispatch:  # workflow_dispatch: 这个配置项允许手动触发工作流程。通过 GitHub Actions 的用户界面，用户可以手动选择并运行这个工作流程
 
+
+# 这段 YAML 配置使用了 GitHub Actions 的并发控制功能
 concurrency:
+  # concurrency: 定义并发控制策略。使用此配置可以限制同一时间内并发执行的工作流实例，避免多个实例同时运行冲突或不必要的重复。
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+      # group: 指定一组并发执行的工作流实例的标识符。这意味着在同一个组中的工作流实例不会同时执行。
+      #${{ github.workflow }}: 引用当前工作流的名称。GitHub 提供的内置变量，用于获取当前工作流的名称。
+      #${{ github.event.pull_request.number || github.ref }}: 
+        #使用条件运算符 || 来选择值。如果存在拉取请求（Pull Request），则使用该请求的编号作为组的标识符，
+        #否则使用 github.ref，即引用的分支名称或标签。这样可以确保对于同一拉取请求的多个工作流实例，
+        #或同一分支上的多次推送，它们会被归入同一组。
+  
+  cancel-in-progress: true  
+  # cancel-in-progress: 设置为 true 时，GitHub Actions 会自动取消同一组中正在运行的工作流实例，
+  # 以确保最新的工作流实例优先运行。这可以节省资源，并避免因旧版本的代码或配置运行而导致不必要的浪费。
+#这段配置的作用是，在同一个工作流和拉取请求或分支上下文中，确保只允许一个工作流实例运行，并自动取消正在运行的旧实例
 
-jobs:
-  job1:
+#  GitHub Actions 工作流中的 jobs 配置部分
+jobs: 
+  # jobs: GitHub Actions 工作流中的核心部分，定义了要执行的工作任务。
+  #一个工作流可以包含一个或多个作业（job），这些作业可以并行或顺序执行
+  
+  job1:  # job1: 这是一个自定义名称的作业标识符。在这个工作流中，该作业被命名为 job1。
+         # 你可以根据实际需求命名它。作业标识符用于区分同一工作流中的不同作业
+
     uses: ./.github/workflows/_get-test-matrix.yml
+          # uses: 表示该作业使用一个已定义的工作流文件。这个字段通常用于重用代码，引用一个位于仓库中的现有工作流文件。
+          #使用这种方法可以避免重复编写相同的作业逻辑。
+          #./.github/workflows/_get-test-matrix.yml: 表示引用了 .github/workflows/ 目录下的 _get-test-matrix.yml 文件。
+          #这是一个相对路径，说明在当前仓库中存在这个文件。这个文件包含了用于 job1 作业的工作流配置。
     with:
+      # with: 这个部分用来向引用的工作流文件传递参数。传递的参数可以在 _get-test-matrix.yml 中使用，类似于函数调用时传递的参数。
       diff_excluded_files: '.github|deprecated|docker|assets|*.md|*.txt'
-      xeon_server_label: 'xeon'
+          # 指定一个以管道符 | 分隔的文件路径或文件类型列表，这些文件会被排除在差异计算之外。
+          # 例如，.github|deprecated|docker|assets|*.md|*.txt 表示忽略 .github 目录下的所有文件、deprecated 目录下的所有文件、
+          # docker 目录下的所有文件、assets 目录下的所有文件，以及所有 .md 和 .txt 文件。
+          # 这个参数通常用于在差异分析或测试矩阵生成时排除某些文件。
+      xeon_server_label: 'xeon' 
+        #  为工作流中使用的 xeon 服务器指定的标签。这个标签可能会在 _get-test-matrix.yml 文件中被用来选择或过滤运行环境或测试目标。
       gaudi_server_label: 'gaudi'
+        # 为工作流中使用的 gaudi 服务器指定的标签。这与 xeon_server_label 类似，也是用于在工作流中配置特定的服务器或环境。
 
-  mega-image-build:
+  mega-image-build: 
+      # 定义了一个 GitHub Actions 工作流中的 mega-image-build 作业
+      # 这是定义的一个作业（job）的名称。在这个工作流中，该作业被命名为 mega-image-build。作业名称用于标识和区分不同的作业
     needs: job1
-    strategy:
-      matrix: ${{ fromJSON(needs.job1.outputs.run_matrix) }}
+      # needs: 定义了该作业的依赖关系。mega-image-build 作业依赖于 job1 作业的完成。
+      # 只有当 job1 成功完成后，mega-image-build 才会被执行
+    strategy: # 用于指定该作业的策略，尤其是在并行执行任务时。这里使用了 matrix 策略，允许根据不同的组合参数来并行运行多个实例。
+      matrix: ${{ fromJSON(needs.job1.outputs.run_matrix) }} 
+      # 定义了用于并行作业的矩阵配置。每个矩阵项会生成一个单独的作业实例。
+      # ${{ fromJSON(needs.job1.outputs.run_matrix) }}: 这里使用了 GitHub Actions 的表达式，将 job1 的输出 run_matrix 
+      # 转换为一个 JSON 对象并传递给矩阵策略。needs.job1.outputs.run_matrix 引用 job1 的输出，
+      # 并使用 fromJSON 函数将其解析为矩阵配置。
     uses: ./.github/workflows/_image-build.yml
-    with:
+      # 表示该作业使用一个已定义的工作流文件。这与前面提到的 job1 类似，通过引用一个位于仓库中的现有工作流文件来重用代码。
+      # ./.github/workflows/_image-build.yml: 这个路径指向了 .github/workflows/ 目录下的 _image-build.yml 文件。
+      # 这是一个相对路径，表示当前仓库中的这个文件被用作 mega-image-build 作业的逻辑实现。
+    with: # 引用的工作流文件传递参数。这些参数会在 _image-build.yml 文件中使用 
       image_tag: ${{ github.event.pull_request.head.sha }}
+      # 为构建的镜像指定一个标签（tag）。这里使用 ${{ github.event.pull_request.head.sha }}，它引用了当前拉取请求（Pull Request）的头部 SHA 值，
+      #　即最新提交的哈希值。这样可以确保生成的镜像标签与该提交唯一对应。
       mega_service: "${{ matrix.example }}"
+      # 传递给 _image-build.yml 的另一个参数。这里的 ${{ matrix.example }} 使用了矩阵中的 example 变量，
+      #每个矩阵项都会有一个不同的 example 值。这允许为不同的矩阵项构建不同的服务或环境。
       runner_label: "docker-build-${{ matrix.hardware }}"
-
-  manifest-test:
+      #为运行器指定一个标签。这里使用了 docker-build-${{ matrix.hardware }}，
+      #其中 ${{ matrix.hardware }} 引用了矩阵中的 hardware 变量。这允许根据硬件配置来选择或标识不同的运行环境。
+    
+    #定义了一个名为 mega-image-build 的作业，它依赖于 job1 的输出并根据矩阵策略并行执行多个实例。
+    #该作业使用 _image-build.yml 文件中的逻辑，并传递了包含镜像标签、服务名称和运行器标签的参数。
+    # 这种配置允许在不同的硬件环境和服务配置下自动化构建 Docker 镜像。
+  
+  #  manifest-test 的作业，属于 GitHub Actions 工作流的一部分
+  manifest-test: # manifest-test: 这是定义的一个作业（job）的名称。在这个工作流中，该作业被命名为 manifest-test。作业名称用于标识和区分不同的作业。
     needs: [job1, mega-image-build]
+      # needs: 定义了该作业的依赖关系。manifest-test 作业依赖于 job1 和 mega-image-build 这两个作业的完成。只有当这两个作业都成功完成后，
+      #manifest-test 才会被执行。这种依赖关系确保了先前的作业执行成功后再进行后续操作。
+    
     strategy:
+      # 用于指定该作业的执行策略，尤其是在并行执行任务时。这里使用了 matrix 策略，允许根据不同的参数组合并行运行多个实例。
       matrix: ${{ fromJSON(needs.job1.outputs.run_matrix) }}
+      # matrix: 定义了用于并行作业的矩阵配置。每个矩阵项会生成一个单独的作业实例。
+      # ${{ fromJSON(needs.job1.outputs.run_matrix) }}: 这里使用了 GitHub Actions 的表达式，
+      # 将 job1 的输出 run_matrix 转换为一个 JSON 对象并传递给矩阵策略。needs.job1.outputs.run_matrix 引用 job1 的输出，
+      # 并使用 fromJSON 函数将其解析为矩阵配置。
+      # 这意味着 manifest-test 作业会根据 job1 的输出矩阵并行运行多个实例。
     uses: ./.github/workflows/_manifest-e2e.yml
-    with:
+      # uses: 表示该作业使用一个已定义的工作流文件。这种配置方式可以重用代码，引用仓库中的现有工作流文件
+      # ./.github/workflows/_manifest-e2e.yml: 这个路径指向了 .github/workflows/ 目录下的 _manifest-e2e.yml 文件。
+      # 这是一个相对路径，表示当前仓库中的这个文件被用作 manifest-test 作业的逻辑实现。
+    
+    with: # 这个部分用来向引用的工作流文件传递参数。这些参数会在 _manifest-e2e.yml 文件中使用。
       example: ${{ matrix.example }}
+      # example: 传递给 _manifest-e2e.yml 的参数之一。这里的 ${{ matrix.example }} 使用了矩阵中的 example 变量。
+      # 每个矩阵项都会有不同的 example 值，这允许在测试中使用不同的示例配置或环境。
       hardware: ${{ matrix.hardware }}
+      # hardware: 传递给 _manifest-e2e.yml 的另一个参数。这里的 ${{ matrix.hardware }} 引用了矩阵中的 hardware 变量。
+      # 每个矩阵项都会有不同的硬件配置，测试可以根据这些配置并行运行。
+      
       tag: ${{ needs.mega-image-build.outputs.image_tag }}
+      # tag: 传递给 _manifest-e2e.yml 的参数。这里的 ${{ needs.mega-image-build.outputs.image_tag }} 
+      # 引用了 mega-image-build 作业的输出 image_tag，即由 mega-image-build 作业生成的镜像标签。
+      # 这个标签会在 manifest-test 作业中被使用，通常用于指定需要测试的镜像版本。
     secrets: inherit
+      # secrets: 用于指定在作业中使用的秘密（如 API 密钥、凭证等）。
+      # inherit: 这个配置表示作业将继承工作流范围内定义的所有秘密（secrets）。
+      # 这些秘密通常在 GitHub Actions 的设置中配置，确保敏感信息在作业中安全地传递和使用。
