@@ -2,67 +2,86 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Support push and pull_request events
+# 主要为了获取
 name: Get Test Matrix
 permissions: read-all
-on:
-  workflow_call:
-    inputs:
-      diff_excluded_files:
-        required: false
-        type: string
+on: #  指定触发工作流的事件
+  workflow_call:  # 这是一个特殊的触发器，表示该工作流可以被其他工作流调用。通过 workflow_call，这个工作流可以作为可重用的模块被其他工作流引用
+    inputs: # 定义工作流调用时需要传递的输入参数。这些参数在工作流运行时由调用者指定
+      diff_excluded_files:  #  输入参数的名称，用于指定应排除在差异检查之外的文件或目录
+        required: false # required: 指定该参数是否为必填项。false 表示可选。
+        type: string    # 指定参数类型。string 表示该参数是一个字符串。
         default: '.github|README.md|*.txt'
-      xeon_server_label:
-        required: false
-        type: string
-        default: 'xeon'
+      xeon_server_label:  #  输入参数的名称，用于指定 Xeon 服务器的标签
+        required: false   # 指定该参数是否为必填项。false 表示可选
+        type: string      # 指定参数类型。string 表示该参数是一个字符串
+        default: 'xeon'   #提供参数的默认值。如果调用时没有提供该参数，则使用默认值 'xeon'
       gaudi_server_label:
         required: false
         type: string
         default: 'gaudi'
-    outputs:
-      run_matrix:
-        description: "The matrix string"
-        value: ${{ jobs.job1.outputs.run_matrix }}
+    outputs: # 定义了工作流的输出值。调用此工作流的其他工作流可以获取这些输出值
+      run_matrix:  # 输出的名称，描述工作流执行的矩阵配置
+        description: "The matrix string" # 表示这个输出值将是一个矩阵字符串
+        value: ${{ jobs.job1.outputs.run_matrix }}  #  表示这个值来源于当前工作流中的 job1 任务的输出 run_matrix。
+
+# workflow_call 事件: 允许这个工作流被其他工作流调用。
+# inputs: 定义了工作流的输入参数，允许调用方定制执行行为。这些参数包括文件排除列表（diff_excluded_files）、Xeon 服务器标签（xeon_server_label）和 Gaudi 服务器标签（gaudi_server_label）。
+# outputs: 定义了工作流的输出值，主要输出 run_matrix，它表示一个用于定义任务矩阵的字符串。
+
 
 jobs:
   job1:
     name: Get-test-matrix
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # 指定任务运行的环境。ubuntu-latest 表示任务将在最新版本的 Ubuntu 虚拟机上运行
     outputs:
       run_matrix: ${{ steps.get-test-matrix.outputs.run_matrix }}
     steps:
-      - name: Get checkout ref
+      - name: Get checkout ref  # name: 这是步骤的名称，描述了此步骤的功能，即获取检出的引用
         run: |
           if [ "${{ github.event_name }}" == "pull_request" ] || [ "${{ github.event_name }}" == "pull_request_target" ]; then
             echo "CHECKOUT_REF=refs/pull/${{ github.event.number }}/merge" >> $GITHUB_ENV
+            # 如果事件类型是 pull_request 或 pull_request_target，则设置 CHECKOUT_REF 为合并引用（即 refs/pull/${{ github.event.number }}/merge），这意味着要检出的是 Pull Request 的合并版本
           else
             echo "CHECKOUT_REF=${{ github.ref }}" >> $GITHUB_ENV
+             # 将计算出的 CHECKOUT_REF 值写入到 GitHub Actions 的环境变量 GITHUB_ENV 中，这样后续的步骤或任务就可以访问这个值
+            # 如果事件类型是其他类型，则将 CHECKOUT_REF 设置为当前的 GitHub 引用（即 github.ref），通常是一个分支、标签或提交 SHA。
           fi
-          echo "checkout ref ${{ env.CHECKOUT_REF }}"
+          echo "checkout ref ${{ env.CHECKOUT_REF }}"  #这行代码将 CHECKOUT_REF 的值打印到控制台，方便调试和日志记录
 
       - name: Checkout out Repo
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ env.CHECKOUT_REF }}
-          fetch-depth: 0
+        uses: actions/checkout@v4  #  指定了要使用的 GitHub Actions 操作。这行表示使用 actions/checkout 这个官方操作，它的版本是 v4。
+        with:  # 传递给 actions/checkout 操作的输入参数。
+          ref: ${{ env.CHECKOUT_REF }}  # ref: 指定要检出的 Git 引用。${{ env.CHECKOUT_REF }} 是前一步骤中设置的环境变量，
+                                        # 它根据不同的 GitHub 事件类型设置为相应的引用（如 Pull Request 的合并引用或当前分支）。
+          fetch-depth: 0   # fetch-depth: 指定检出时的历史深度。0 表示检出完整的 Git 历史，而不是仅限于一个提交，这在进行复杂的差异比较时非常有用
 
-      - name: Get test matrix
-        id: get-test-matrix
+      - name: Get test matrix # 获取测试矩阵
+        id: get-test-matrix   # id: 给步骤分配一个 ID，以便在后续步骤中引用该步骤的输出
         run: |
           set -xe
           if [ "${{ github.event_name }}" == "pull_request" ] || [ "${{ github.event_name }}" == "pull_request_target" ]; then
-            LATEST_COMMIT_SHA=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/opea-project/GenAIExamples/commits?sha=main" | jq -r '.[0].sha')
-            echo "Latest commit SHA is $LATEST_COMMIT_SHA"
-            base_commit=$LATEST_COMMIT_SHA
+            base_commit=${{ github.event.pull_request.base.sha }}
           else
             base_commit=$(git rev-parse HEAD~1) # push event
           fi
-          merged_commit=$(git log -1 --format='%H')
+              # 如果事件是 pull_request 或 pull_request_target，则将 base_commit 设置为目标分支的基础提交（base.sha）。
+              # 否则，将 base_commit 设置为当前分支的上一个提交（HEAD~1），用于比较推送事件中的变更。
+
+
+          merged_commit=$(git log -1 --format='%H')  # 获取合并提交的哈希值（merged_commit），用于后续的差异比较
+
           changed_files="$(git diff --name-only ${base_commit} ${merged_commit} | \
           grep -vE '${{ inputs.diff_excluded_files }}')" || true
+            # 使用 git diff 命令获取在 base_commit 和 merged_commit 之间变更的文件列表，
+            # 并排除符合 inputs.diff_excluded_files 模式的文件（例如 .github, README.md, *.txt）。
+            # || true 确保即使 grep 未找到匹配的文件（返回非零状态），脚本也不会中止。
+
           examples=$(printf '%s\n' "${changed_files[@]}" | grep '/' | cut -d'/' -f1 | sort -u)
-          run_matrix="{\"include\":["
+            # 从变更的文件中提取出顶级目录名（代表不同的示例），并对其进行排序去重，得到 examples
+
+          run_matrix="{\"include\":[" # 初始化 run_matrix 字符串，用于构建包含要运行的测试矩阵的 JSON 对象。
+
           for example in ${examples}; do
               run_hardware=""
               if [ $(printf '%s\n' "${changed_files[@]}" | grep ${example} | grep -c gaudi) != 0 ]; then run_hardware="gaudi"; fi
@@ -76,5 +95,11 @@ jobs:
                   fi
               done
           done
-          run_matrix=$run_matrix"]}"
-          echo "run_matrix=${run_matrix}" >> $GITHUB_OUTPUT
+          run_matrix=$run_matrix"]}"  # 关闭 JSON 对象的 include 数组
+
+          # 将构建的 run_matrix JSON 字符串写入到 GitHub Actions 的输出变量 GITHUB_OUTPUT 中，以便后续步骤或任务使用。
+          echo "run_matrix=${run_matrix}" >> $GITHUB_OUTPUT  
+
+
+          # Checkout out Repo: 使用 actions/checkout 操作检出代码库，使用特定的 Git 引用，并获取完整的 Git 历史
+          # Get test matrix: 通过比较基础提交和合并提交之间的文件变更，生成一个测试矩阵（包括需要测试的示例和硬件标签），并将其作为输出提供给后续任务。
