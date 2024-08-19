@@ -1,99 +1,179 @@
 # Copyright (C) 2024 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
+# 这段代码定义了一个 GitHub Actions 工作流，用于在 Kubernetes 环境中执行端到端（E2E）测试
 
 name: Single Kubernetes Manifest E2e Test For Call
-on:
-  workflow_call:
-    inputs:
-      example:
-        default: "ChatQnA"
-        description: "The example to test on K8s"
-        required: true
-        type: string
-      hardware:
-        default: "xeon"
-        description: "Nodes to run the test, xeon or gaudi"
-        required: true
-        type: string
-      tag:
-        default: "latest"
-        description: "Tag to apply to images, default is latest"
-        required: false
-        type: string
-      context:
-        default: "CI"
-        description: "CI or CD"
-        required: false
-        type: string
+#name: 这是工作流程的名称。在 GitHub Actions 的用户界面中会显示此名称。
+#该工作流程被命名为 “Single Kubernetes Manifest E2e Test For Call”，
+#表示这是一个用于执行单一 Kubernetes manifest 文件的端到端测试的工作流。
 
-jobs:
-  manifest-test:
-    runs-on: "k8s-${{ inputs.hardware }}"
-    continue-on-error: true
+on: #  定义触发工作流的事件
+  workflow_call:  # 这是一个特殊的触发器，表示该工作流可以被其他工作流调用。通过 workflow_call，这个工作流可以作为可重用的模块被其他工作流引用
+    inputs: # 定义工作流调用时需要传递的输入参数。这些参数在工作流运行时由调用者指定
+      example: # 这是第一个输入参数的名称
+        default: "ChatQnA" # 指定了这个参数的默认值为 "ChatQnA"。如果调用工作流时没有提供此参数，将使用默认值。
+        description: "The example to test on K8s" # 这是对参数的简要描述，用于解释这个参数的作用。这里描述的是 “在 Kubernetes 上进行测试的示例”。
+        required: true  # 设置为 true，表示这个参数在调用工作流时是必需的，必须提供一个值
+        type: string  # 指定参数的类型为 string，即字符串
+      
+      hardware: #  这是第二个输入参数的名称
+        default: "xeon" # 指定了默认值为 "xeon"。如果调用工作流时没有提供此参数，将使用默认值
+        description: "Nodes to run the test, xeon or gaudi" # 描述该参数的用途。这里描述的是 “运行测试的节点类型，可能是 xeon 或 gaudi”
+        required: true  # 设置为 true，表示这个参数在调用工作流时必须提供
+        type: string #  指定参数的类型为 string
+      tag: # 这是第三个输入参数的名称。
+        default: "latest"  # 指定默认值为 "latest"。如果调用工作流时没有提供此参数，将使用默认值。
+        description: "Tag to apply to images, default is latest" # 描述该参数的用途。这里描述的是 “应用于镜像的标签，默认是 latest”，表示要使用的镜像标签。
+        required: false # 设置为 false，表示这个参数是可选的，不必在调用时提供。
+        type: string # 指定参数的类型为 string。
+
+#这段代码定义了一个 GitHub Actions 工作流，命名为 “Single Kubernetes Manifest E2e Test For Call”。
+#这个工作流是可重用的，可以通过 workflow_call 事件从其他工作流中调用。
+#它接受三个输入参数：example（要在 Kubernetes 上测试的示例）、hardware（运行测试的硬件类型，如 xeon 或 gaudi），
+#以及 tag（应用于镜像的标签）。这些参数为字符串类型，并且可以有默认
+
+# jobs 配置部分，具体配置了一个名为 manifest-test 的作业
+jobs:  # 定义了工作流中要执行的作业（jobs）。一个工作流可以包含多个作业，每个作业可以包含多个步骤
+  manifest-test:  # 这是定义的一个作业名称。在这个工作流中，该作业被命名为 manifest-test。作业名称用于标识和区分不同的作业
+    runs-on: "k8s-${{ inputs.hardware }}"  
+    # 指定该作业运行的环境或运行器（runner）。这里使用了动态引用，根据输入参数 hardware 来决定运行器的环境。
+    # "k8s-${{ inputs.hardware }}": 这是一个动态生成的字符串。${{ inputs.hardware }} 引用了工作流输入的 hardware 参数。
+    # 比如，如果 hardware 的值是 xeon，那么最终的运行器环境会是 k8s-xeon。
+    # 这个配置意味着作业会在一个 Kubernetes 相关的环境中运行，该环境根据硬件配置而有所不同。
+    continue-on-error: true  
+      # 设置为 true 时，即使作业中的某个步骤失败，工作流也会继续运行。这在测试场景下很有用，
+      # 即使某个测试失败，也希望其他测试继续执行，从而收集更多的测试结果。
     steps:
-      - name: Clean Up Working Directory
+    # 第一步骤：清理环境
+      # 定义了该作业中的步骤。每个步骤是作业中的一个独立任务，通常包括运行命令、使用预定义的 GitHub Actions、或者调用外部脚本。
+      - name: Clean Up Working Directory 
+          # 这是对步骤的简要描述，便于识别步骤的功能。在用户界面中会显示这个名称。
+          #这里步骤被命名为 “Clean Up Working Directory”，表示这个步骤的功能是清理工作目录。
         run: sudo rm -rf ${{github.workspace}}/*
-
+          # 指定在这个步骤中要执行的命令。这个字段通常包含一个或多个 shell 命令。
+          # sudo rm -rf ${{ github.workspace }}/*: 这是一个 shell 命令，用于删除工作目录中的所有文件。
+          # ${{ github.workspace }}/*: ${{ github.workspace }} 是 GitHub 提供的内置变量，表示当前工作流运行的工作目录。
+          # /* 表示该目录下的所有文件和子目录。这个命令会删除工作目录中的所有内容。
+    
+    # 第二步骤：获取检出参考
       - name: Get checkout ref
+        # 这是步骤的名称，描述了步骤的功能，即获取要检出的 Git 参考（ref）。
+
         run: |
+          # 使用 shell 命令来执行一系列操作。这里使用了 if-else 语句，根据不同的事件类型设置 CHECKOUT_REF 环境变量。
           if [ "${{ github.event_name }}" == "pull_request" ] || [ "${{ github.event_name }}" == "pull_request_target" ]; then
             echo "CHECKOUT_REF=refs/pull/${{ github.event.number }}/merge" >> $GITHUB_ENV
+             # 如果事件是 pull_request 或 pull_request_target，则将 CHECKOUT_REF 设置为 refs/pull/${{ github.event.number }}/merge。
+             # 这里，${{ github.event.number }} 表示当前拉取请求的编号（PR number）。然后使用 
+             # >> $GITHUB_ENV 将 CHECKOUT_REF 环境变量写入 GitHub 提供的环境文件中，使其在后续步骤中可用
           else
             echo "CHECKOUT_REF=${{ github.ref }}" >> $GITHUB_ENV
+            # CHECKOUT_REF 设置为 ${{ github.ref }}，即当前的 Git 参考（通常是分支或标签）。同样使用 >> $GITHUB_ENV 将结果写入环境文件。
           fi
           echo "checkout ref ${{ env.CHECKOUT_REF }}"
+            # 出 CHECKOUT_REF 的值，这个值在前面的步骤中已经被写入到环境变量文件中。
+            #${{ env.CHECKOUT_REF }} 通过引用已经设置的环境变量来显示最终确定的参考值。
 
-      - name: Checkout out Repo
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ env.CHECKOUT_REF }}
+    # 第三步骤：检出代码仓库（Checkout Repo）
+      - name: Checkout out Repo   # 这是步骤的名称，描述了步骤的功能，即检出代码仓库
+        uses: actions/checkout@v4 # 指定使用 GitHub 提供的官方 checkout 操作，版本为 v4。这个操作用于检出（clone）代码仓库到工作流的运行环境中
+        with: # 该部分用于传递参数给 checkout 操作
+          ref: ${{ env.CHECKOUT_REF }}  
+          # 指定要检出的 Git 参考。ref 使用的是第一步中获取的 ${{ env.CHECKOUT_REF }} 值。
+          #这个参考可能是某个分支、标签或拉取请求的合并分支。
           fetch-depth: 0
-
-      - name: Set variables
-        run: |
+            # fetch-depth 用于指定 Git 检出时要拉取的提交历史深度。设置为 0 意味着拉取整个历史，
+            # 而不是只拉取最新的几次提交。这通常用于需要完整的提交历史进行复杂操作的场景。
+    
+    # 第四步骤：设置环境变量
+      - name: Set variables  # name: 这是步骤的名称，描述了步骤的功能，即设置环境变量。
+        run: |  # run: 关键字表示要执行的命令。这里使用了 |，表示接下来的一部分是多行 shell 命令
           echo "IMAGE_REPO=$OPEA_IMAGE_REPO" >> $GITHUB_ENV
-          echo "IMAGE_TAG=${{ inputs.tag }}" >> $GITHUB_ENV
-          lower_example=$(echo "${{ inputs.example }}" | tr '[:upper:]' '[:lower:]')
-          echo "NAMESPACE=$lower_example-$(date +%Y%m%d%H%M%S)" >> $GITHUB_ENV
-          echo "ROLLOUT_TIMEOUT_SECONDS=1800s" >> $GITHUB_ENV
-          echo "KUBECTL_TIMEOUT_SECONDS=60s" >> $GITHUB_ENV
-          echo "continue_test=true" >> $GITHUB_ENV
-          echo "should_cleanup=false" >> $GITHUB_ENV
-          echo "skip_validate=true" >> $GITHUB_ENV
-          echo "CONTEXT=${{ inputs.context }}" >> $GITHUB_ENV
-          echo "NAMESPACE=$NAMESPACE"
+            # 这行命令将一个名为 IMAGE_REPO 的环境变量写入到 GitHub Actions 提供的环境文件中。
+            # ${OPEA_IMAGE_REPO} 是一个 shell 环境变量的值。
+            # >> $GITHUB_ENV 表示将内容追加到 GitHub Actions 的环境变量文件中，使得后续步骤可以使用这个变量。
 
+          echo "IMAGE_TAG=${{ inputs.tag }}" >> $GITHUB_ENV
+            # 这行命令将一个名为 IMAGE_TAG 的环境变量写入到环境文件中。${{ inputs.tag }} 是 GitHub Actions 的输入参数的值，代表镜像的标签。
+          
+          lower_example=$(echo "${{ inputs.example }}" | tr '[:upper:]' '[:lower:]')
+            # 这行命令将 inputs.example 参数的值转换为小写。tr '[:upper:]' '[:lower:]' 
+            #是一个用于转换字符大小写的 shell 命令。lower_example 变量保存了转换后的小写值
+          
+          echo "NAMESPACE=$lower_example-$(date +%Y%m%d%H%M%S)" >> $GITHUB_ENV
+            # 这行命令将 NAMESPACE 环境变量写入到环境文件中。变量值是 lower_example（已转换为小写的示例）加上
+            # 当前时间戳（$(date +%Y%m%d%H%M%S)）。
+            # 时间戳格式为 YYYYMMDDHHMMSS，确保每次运行时 NAMESPACE 的值都是唯一的。
+
+          echo "ROLLOUT_TIMEOUT_SECONDS=1800s" >> $GITHUB_ENV
+            # 这行命令将 ROLLOUT_TIMEOUT_SECONDS 环境变量写入到环境文件中，设置为 1800s，即 30 分钟。
+            # 这通常用于指定 Kubernetes 更新操作的超时时间。
+
+          echo "KUBECTL_TIMEOUT_SECONDS=60s" >> $GITHUB_ENV # 设置为 60s，即 1 分钟。这通常用于指定 kubectl 命令的超时时间
+          echo "continue_test=true" >> $GITHUB_ENV          # 设置为 true。这个变量可能用于控制测试是否继续执行。
+            
+          echo "should_cleanup=false" >> $GITHUB_ENV  # ，设置为 false。这个变量可能用于控制是否进行清理操作
+            
+          echo "skip_validate=true" >> $GITHUB_ENV  # 设置为 true。这个变量可能用于控制是否跳过某些验证步骤。
+           # 
+          echo "NAMESPACE=$NAMESPACE"  # 这是为了调试或确认 NAMESPACE 的值，帮助开发者查看和验证环境变量设置是否正确。
+
+    # 第五步骤：主要用于安装和测试 Kubernetes manifests
       - name: Kubectl install
-        id: install
+        id: install  # id: 为这个步骤指定一个标识符（install）。这个标识符可以在工作流的其他地方引用。
         run: |
           if [[ ! -f ${{ github.workspace }}/${{ inputs.example }}/tests/test_manifest_on_${{ inputs.hardware }}.sh ]]; then
             echo "No test script found, exist test!"
             exit 0
           else
             ${{ github.workspace }}/${{ inputs.example }}/tests/test_manifest_on_${{ inputs.hardware }}.sh init_${{ inputs.example }}
-            echo "should_cleanup=true" >> $GITHUB_ENV
+            echo "should_cleanup=true" >> $GITHUB_ENV  # 将 should_cleanup 环境变量设置为 true，并写入到 GitHub Actions 的环境变量文件中，使得后续步骤可以使用这个变量
+            
+            # 使用 kubectl 命令创建一个新的 Kubernetes 命名空间。${NAMESPACE} 是之前定义的环境变量，表示命名空间的名称
             kubectl create ns $NAMESPACE
+            
+            # 运行脚本文件，并传递 install_${{ inputs.example }} 和 $NAMESPACE 作为参数。这通常用于在指定命名空间中安装 manifests。
             ${{ github.workspace }}/${{ inputs.example }}/tests/test_manifest_on_${{ inputs.hardware }}.sh install_${{ inputs.example }} $NAMESPACE
+            
+            # 输出一条消息，表示正在测试 ${{ inputs.example }}，并等待 Pod 准备好
             echo "Testing ${{ inputs.example }}, waiting for pod ready..."
+            
+            # 检查 Kubernetes 部署的状态，确保 Pod 已经准备好                
+            # "$ROLLOUT_TIMEOUT_SECONDS": 检查指定命名空间中的部署状态，等待 Pod 准备好的超时时间是 $ROLLOUT_TIMEOUT_SECONDS。
             if kubectl rollout status deployment --namespace "$NAMESPACE" --timeout "$ROLLOUT_TIMEOUT_SECONDS"; then
+
+              # 如果 Pod 准备好，输出 "Testing manifests ${{ inputs.example }}, waiting for pod ready done!" 并将 skip_validate 环境变量设置为 false。
               echo "Testing manifests ${{ inputs.example }}, waiting for pod ready done!"
+
               echo "skip_validate=false" >> $GITHUB_ENV
             else
+              # 如果超时，输出 "Timeout waiting for pods in namespace $NAMESPACE to be ready!" 并使用 exit 1 退出步骤，表示失败
               echo "Timeout waiting for pods in namespace $NAMESPACE to be ready!"
               exit 1
             fi
-            sleep 60
+            sleep 60  # 休眠 60 秒。这通常用于确保所有操作都完成后，再继续执行后续步骤
+            
           fi
 
+          # 用于检查并执行 Kubernetes manifests 的安装和测试。它首先检查指定的测试脚本是否存在，
+          # 如果存在则运行该脚本进行初始化和安装操作。随后，创建一个新的 Kubernetes 命名空间，并等待部署中的 Pod 准备好。
+          # 如果超时或失败，则报告错误并退出；如果成功，则继续执行后续步骤。环境变量用于配置和控制工作流的行为，
+          # 确保测试和安装过程顺利进行。
+
+      # 第六步骤：在 GitHub Actions 工作流中用于验证 e2e 测试和   
       - name: Validate e2e test
-        if: always()
+        if: always()  # if: 指定一个条件，控制是否执行此步骤。always() 表示无论前面的步骤成功还是失败，都会执行这个步骤。
         run: |
           if $skip_validate; then
             echo "Skip validate"
           else
             ${{ github.workspace }}/${{ inputs.example }}/tests/test_manifest_on_${{ inputs.hardware }}.sh validate_${{ inputs.example }} $NAMESPACE
+            # 运行指定的脚本进行验证。脚本接收两个参数：validate_${{ inputs.example }} 和 $NAMESPACE，
+            # 用于验证 Kubernetes manifests 是否按预期工作。
           fi
-
+          validate e2e test: 这个步骤根据环境变量 skip_validate 的值决定是否执行测试验证。测试脚本用于验证 Kubernetes manifests 的功能
+      
+      # 第 七 步 卸载 Kubernetes 资源。 
       - name: Kubectl uninstall
         if: always()
         run: |
@@ -103,3 +183,9 @@ jobs:
               kubectl delete ns $NAMESPACE --force --grace-period=0 --timeout=$KUBECTL_TIMEOUT_SECONDS
             fi
           fi
+
+          尝试删除指定的 Kubernetes 命名空间 $NAMESPACE，超时时间为 $KUBECTL_TIMEOUT_SECONDS。
+          如果删除命名空间操作失败，则执行 else 部分的命令。
+          kubectl delete pods --namespace $NAMESPACE --force --grace-period=0 --all: 强制删除指定命名空间中的所有 Pod，立即删除（不考虑宽限期）。
+          kubectl delete ns $NAMESPACE --force --grace-period=0 --timeout=$KUBECTL_TIMEOUT_SECONDS: 强制删除指定命名空间，立即删除（不考虑宽限期），超时时间为 $KUBECTL_TIMEOUT_SECONDS。
+          Kubectl uninstall: 这个步骤根据环境变量 should_cleanup 的值决定是否清理 Kubernetes 资源。如果需要清理，首先尝试删除命名空间，如果失败，则强制删除所有 Pod 和命名空间。
